@@ -5,7 +5,6 @@ library(dplyr)
 library(readr)
 library(lubridate)
 library(readxl)
-library(GGally)
 
 here()
 
@@ -98,7 +97,6 @@ ggplot(data, aes(x = Date, y = diff)) +
   guides(colour = guide_legend(title = ""))
 ggsave(here("./analysis/output/graphs/train_test_diff.png"), width = 8, height = 5)
 
-
 # ACF 
 data |> ACF(Value) |>
   autoplot()
@@ -132,17 +130,23 @@ my_models <- train |>
   model(
     ets    = ETS(Value ~ trend("A") + season("A"), ic = "aic"),
     arima  = ARIMA(Value, ic = "aic"),
-    arimax = ARIMA(Value ~ great_recession + Vol, ic = "aic")
+    arimax = ARIMA(Value ~ great_recession + Vol, ic = "aic"),
+    arimax_manual = ARIMA(Value ~ Vol + pdq(1,1,0) + PDQ(1,1,0, period = "1 year"))
     ) |>
-  mutate(ensemble = (ets+arima+arimax)/3)
+  mutate(ensemble = (ets+arima+arimax+arimax_manual)/4)
+
+my_models |> select(ets) |> report() 
+my_models |> select(arimax_manual) |> report() 
 
 my_forecasts <- my_models |>
   forecast(new_data = test)
 
 
 # Plot the model predictions on the testing data
+data2 <- data |> filter(Date > yearmonth("2010 Jan"))
+
 my_forecasts |>
-  autoplot(test, level = NULL) +
+  autoplot(data2, level = NULL) +
   theme_minimal() +
   theme(
     legend.position = "bottom",
@@ -156,7 +160,6 @@ my_forecasts |>
   guides(colour = guide_legend(title = ""))
 ggsave(here("./analysis/output/graphs/forecasts.png"), width = 8, height = 5)
 
-
 # IS and OOS accuracy metrics
 is_accuracy  <- my_models |> accuracy()
 oos_accuracy <- accuracy(my_forecasts, test)
@@ -165,55 +168,6 @@ combined_accuracy <- rbind(is_accuracy, oos_accuracy) |> arrange(desc(.type), RM
 d <- as.matrix(mutate_if(
   combined_accuracy, is.numeric, ~round(., 2)
 ))
-stargazer(d, out = here("./analysis/output/graphs/Accuracy Table.tex"), type = "latex")
+stargazer(d, out = here("./analysis/output/tables/Accuracy Table.tex"), type = "latex")
 
 stargazer(d, type = "text")
-
-
-
-
-
-# Fit models (diff)
-train2 <- train |> filter(Date > yearmonth("2006 Jan"))
-
-my_models <- train2 |>
-  model(
-    ets    = ETS(diff ~ trend("A") + season("A"), ic = "aic"),
-    arima  = ARIMA(diff, ic = "aic"),
-    arimax = ARIMA(diff ~ great_recession + Vol, ic = "aic")
-  ) |>
-  mutate(ensemble = (ets+arima+arimax)/3)
-
-my_forecasts <- my_models |>
-  forecast(new_data = test)
-
-
-# Plot the model predictions on the testing data
-my_forecasts |>
-  autoplot(test, level = NULL) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    panel.border = element_rect(colour = "black", fill=NA, linewidth=1)
-  ) + 
-  labs(
-    y = "Change in Sales and Inventories ($ billions)",
-    title = "U.S. Chemicals and Allied Products Wholesale Trade", subtitle= "First Difference",
-    x="",
-    caption = "Source: U.S. Census Bureau.") +
-  guides(colour = guide_legend(title = ""))
-ggsave(here("./analysis/output/graphs/forecasts_diff.png"), width = 8, height = 5)
-
-
-# IS and OOS accuracy metrics
-is_accuracy  <- my_models |> accuracy()
-oos_accuracy <- accuracy(my_forecasts, test)
-combined_accuracy <- rbind(is_accuracy, oos_accuracy) |> arrange(desc(.type), RMSE)
-
-d <- as.matrix(mutate_if(
-  combined_accuracy, is.numeric, ~round(., 2)
-))
-stargazer(d, out = here("./analysis/output/graphs/Accuracy Table_diff.tex"), type = "latex")
-
-stargazer(d, type = "text")
-
