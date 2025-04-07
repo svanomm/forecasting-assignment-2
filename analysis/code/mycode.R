@@ -57,7 +57,7 @@ data <- data |> mutate(
 train <- data |> slice(1:72)
 test  <- data |> slice(73:84)
 
-# Create variable train_test which is "train" for observations 1:48 and "test" else
+# Create variable train_test which is "train" for observations 1:72 and "test" else
 data <- data |> mutate(
   train_test = if_else(
     row_number() <= 72
@@ -97,17 +97,16 @@ ggplot(data, aes(x = Date, y = diff)) +
   guides(colour = guide_legend(title = ""))
 ggsave(here("./analysis/output/graphs/train_test_diff.png"), width = 8, height = 5)
 
-# ACF 
-data |> ACF(Value) |>
-  autoplot()
-data |> ACF(diff) |>
-  autoplot()
+# stationarity
+unitroot_ndiffs(data$Value)
+unitroot_kpss(data$Value)
+unitroot_kpss(data$diff)
 
 # Finding best ARIMAX model
 arima_test <- train |>
   model(
     arimax0  = ARIMA(Value, ic = "aic"),
-    arimax01 = ARIMA(Value, ic = "aic"),
+    arimax01 = ARIMA(Value ~ great_recession, ic = "aic"),
     arimax1  = ARIMA(Value ~ great_recession + Vol, ic = "aic"),
     arimax2  = ARIMA(Value ~ great_recession + Vol + Price, ic = "aic"),
     arimax3  = ARIMA(Value ~ great_recession + Vol + Price + Open, ic = "aic"),
@@ -117,13 +116,14 @@ arima_test <- train |>
     arimax7  = ARIMA(Value ~ great_recession + Vol + lag(Vol, 1) + lag(Vol, 2), ic = "aic"),
     arimax8  = ARIMA(Value ~ great_recession + Vol + lag(Vol, 1) + lag(Vol, 2) + lag(Vol, 3), ic = "aic"),
     arimax9  = ARIMA(Value ~ great_recession + Vol + lag(Vol, 1) + lag(Vol, 2) + lag(Vol, 3)+ lag(Vol, 4), ic = "aic"),
+    arimax_manual = ARIMA(Value ~ Vol + pdq(1,1,0) + PDQ(1,1,0, period = "1 year"))
   )
 glance(arima_test)
 # arimax9 has the lowest AIC, but its AICc is the same as simpler models.
 # For simplicity, I use arimax1.
 
 arima_test |> select(arimax1) |> report() 
-# ARIMA(4,0,0)(0,0,1)
+# ARIMA(4,0,0)(0,0,1)[12]
 
 # Fit models
 my_models <- train |>
