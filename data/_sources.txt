@@ -1,0 +1,1 @@
+https://www.census.gov/econ/currentdata/?programCode=MWTS&startYear=1992&endYear=2025&categories[]=4247&dataType=SM&geoLevel=US&adjusted=0&notAdjusted=1&errorData=0#line099
